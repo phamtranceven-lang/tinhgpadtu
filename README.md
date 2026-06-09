@@ -1,8 +1,28 @@
-# DTU GPA – GitHub Pages
+# DTU GPA – gói GitHub Pages đã sửa
 
-- Đưa toàn bộ file trong thư mục này lên repository; `index.html` nằm ở thư mục gốc.
-- Dữ liệu được lưu trong `localStorage` của trình duyệt.
-- Email hỗ trợ: `phambaobao557@gmail.com`.
-- Không sử dụng Google Analytics, Vercel Analytics, Google Fonts, Telegraph hoặc file.io.
-- Logic tính GPA, tín chỉ và giả lập điểm được giữ nguyên như bản gốc.
-- Đây là công cụ tham khảo cá nhân, không phải website chính thức của Đại Học Duy Tân.
+## Cách đăng
+
+1. Xóa các file cũ trong repository.
+2. Upload toàn bộ file trong ZIP này vào thư mục gốc của nhánh `main`.
+3. Vào **Settings → Pages**.
+4. Chọn **Deploy from a branch → main → /(root)** rồi bấm **Save**.
+5. Mở: `https://phamtranceven-lang.github.io/tinhgpadtu/`
+
+## Cấu trúc
+
+- `index.html`
+- `index-BPbzpTUj.js`
+- `index-DLIS5DeS.css`
+- `guide_curriculum.png`
+- `guide_step1.png`
+- `guide_step2.png`
+- `guide_step3.png`
+- `404.html`
+- `.nojekyll`
+
+## Lưu ý kỹ thuật
+
+- Không còn thư mục `assets`; JS và CSS nằm cùng cấp với `index.html`.
+- Dữ liệu môn học được lưu bằng `localStorage` của trình duyệt.
+- Email hỗ trợ đã đổi thành `phambaobao557@gmail.com`.
+- Bundle ứng dụng đầy đủ được tải từ commit gốc đã ghim trên GitHub ở lần mở đầu và được trình duyệt lưu cache. Vì vậy trang cần Internet trong lần tải đầu tiên.

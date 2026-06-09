@@ -49,6 +49,7 @@
     return {
       id: uid(),
       name: `Môn ${index}`,
+      overallPercent: '',
       mode: 'quick',
       quick: {
         componentScore: '',
@@ -74,6 +75,7 @@
     return {
       id: course.id || fallback.id,
       name: typeof course.name === 'string' ? course.name : fallback.name,
+      overallPercent: course.overallPercent ?? '',
       mode: course.mode === 'advanced' ? 'advanced' : 'quick',
       quick: {
         componentScore: course.quick?.componentScore ?? '',
@@ -309,6 +311,13 @@
         return;
       }
 
+      if (field === 'overall-percent') {
+        course.overallPercent = value;
+        this.save();
+        this.updateLive(courseId);
+        return;
+      }
+
       if (field === 'quick-component-score') {
         course.quick.componentScore = value;
         const earnedInput = this.shadowRoot.querySelector(`[data-course-id="${courseId}"][data-field="quick-component-earned"]`);
@@ -380,7 +389,8 @@
     onChange(event) {
       const scoreField = event.target.matches('[data-score-input="true"]');
       const earnedField = event.target.matches('[data-earned-input="true"]');
-      if (!scoreField && !earnedField) return;
+      const overallField = event.target.matches('[data-overall-input="true"]');
+      if (!scoreField && !earnedField && !overallField) return;
       if (scoreField) {
         const number = scoreValue(event.target.value);
         if (number !== null) event.target.value = format(number, 2);
@@ -391,10 +401,18 @@
         const number = toNumber(event.target.value);
         if (number !== null) event.target.value = format(clamp(number, 0, max), 2);
       }
+      if (overallField) {
+        const number = toNumber(event.target.value);
+        if (number !== null) event.target.value = format(clamp(number, 0, 100), 2);
+      }
       this.onInput(event);
     }
 
     calculate(course) {
+      const rawOverallPercent = toNumber(course.overallPercent);
+      const overallPercent = rawOverallPercent === null ? null : clamp(rawOverallPercent, 0, 100);
+      const manualTotal = overallPercent === null ? null : overallPercent / 10;
+
       if (course.mode === 'quick') {
         const componentScore = scoreValue(course.quick.componentScore);
         const finalScore = scoreValue(course.quick.finalScore);
@@ -415,7 +433,9 @@
           finalScore,
           complete,
           missingComponent: componentScore === null,
-          componentEarnedPercent: componentContribution * 10
+          componentEarnedPercent: componentContribution * 10,
+          overallPercent,
+          manualTotal
         };
       }
 
@@ -446,7 +466,9 @@
         finalScore,
         complete,
         missingComponent,
-        componentEarnedPercent: componentContribution * 10
+        componentEarnedPercent: componentContribution * 10,
+        overallPercent,
+        manualTotal
       };
     }
 
@@ -465,17 +487,28 @@
       const live = this.shadowRoot.querySelector(`[data-live-course="${courseId}"]`);
       const target = this.shadowRoot.querySelector(`[data-target-course="${courseId}"]`);
       const tabName = this.shadowRoot.querySelector(`[data-tab-name="${courseId}"]`);
+      const overallSummary = this.shadowRoot.querySelector(`[data-overall-summary="${courseId}"]`);
       if (live) live.innerHTML = this.resultHTML(course, calc);
       if (target) target.innerHTML = this.targetHTML(course, calc);
       if (tabName) tabName.textContent = course.name.trim() || 'Chưa đặt tên';
+      if (overallSummary) overallSummary.innerHTML = this.overallSummaryHTML(calc);
+    }
+
+    overallSummaryHTML(calc) {
+      const score = calc.manualTotal;
+      const grade = gradeFor(score);
+      return score === null
+        ? '<span class="overall-empty">Nhập 0–100%</span>'
+        : `<span><b>${format(score, 2)}/10</b><em>Điểm chữ ${grade.letter}</em></span>`;
     }
 
     resultHTML(course, calc) {
-      const score = calc.total;
+      const score = calc.manualTotal ?? calc.total;
       const grade = gradeFor(score);
       const weightOkay = Math.abs(calc.weightTotal - 100) < 0.001;
       let helper = '';
-      if (!weightOkay) helper = `<span class="warning">Tổng trọng số đang là ${format(calc.weightTotal)}%, cần bằng 100%.</span>`;
+      if (calc.manualTotal !== null) helper = `<span class="${grade.className === 'pass' ? 'success-text' : 'danger-text'}">Quy đổi trực tiếp từ ${format(calc.overallPercent, 2)}% tổng toàn môn • ${grade.label}</span>`;
+      else if (!weightOkay) helper = `<span class="warning">Tổng trọng số đang là ${format(calc.weightTotal)}%, cần bằng 100%.</span>`;
       else if (calc.missingComponent) helper = '<span class="muted">Nhập đủ điểm thành phần để tính chính xác.</span>';
       else if (calc.finalScore === null) helper = `<span class="muted">Hiện đã có ${format(calc.componentContribution)} điểm trước cuối kỳ.</span>`;
       else helper = `<span class="${grade.className === 'pass' ? 'success-text' : 'danger-text'}">${grade.label}</span>`;
@@ -520,6 +553,25 @@
           </div>
           <p class="target-note">Điểm hiển thị là mức tối thiểu cần đạt ở bài cuối kỳ để tổng kết chạm mốc điểm chữ tương ứng.</p>
         ` : ''}
+      `;
+    }
+
+    overallPercentHTML(course) {
+      const raw = toNumber(course.overallPercent);
+      const percent = raw === null ? null : clamp(raw, 0, 100);
+      const calc = this.calculate(course);
+      return `
+        <label class="overall-percent-card">
+          <span class="overall-copy">
+            <strong>Tổng % tất cả cột</strong>
+            <small>Nhập tổng phần trăm toàn môn trên myDTU để biết điểm chữ ngay</small>
+          </span>
+          <span class="overall-input-wrap">
+            <input data-overall-input="true" data-field="overall-percent" data-course-id="${course.id}" inputmode="decimal" type="number" min="0" max="100" step="0.01" placeholder="0 - 100" value="${percent === null ? '' : escapeHTML(format(percent, 2))}">
+            <b>%</b>
+          </span>
+          <span class="overall-summary" data-overall-summary="${course.id}">${this.overallSummaryHTML(calc)}</span>
+        </label>
       `;
     }
 
@@ -631,6 +683,8 @@
             <button type="button" class="delete-course" data-action="remove-course" data-course-id="${course.id}" title="Xóa môn">🗑</button>
           </div>
 
+          ${this.overallPercentHTML(course)}
+
           <div class="mode-tabs" role="tablist">
             <button type="button" class="${course.mode === 'quick' ? 'active' : ''}" data-action="set-mode" data-mode="quick" data-course-id="${course.id}">⚡ Tính nhanh</button>
             <button type="button" class="${course.mode === 'advanced' ? 'active' : ''}" data-action="set-mode" data-mode="advanced" data-course-id="${course.id}">🧩 Nhiều thành phần</button>
@@ -698,6 +752,19 @@
         .course-name:focus { border-color: #6366f1; }
         .delete-course { flex: 0 0 auto; width: 35px; height: 35px; border: 1px solid rgba(244,63,94,.25); border-radius: 10px; color: #fda4af; background: rgba(244,63,94,.08); }
         .delete-course:hover { background: rgba(244,63,94,.18); }
+        .overall-percent-card { margin: 2px 0 13px; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: 12px; border: 1px solid rgba(251,191,36,.38); border-radius: 14px; padding: 12px 14px; background: linear-gradient(135deg, rgba(245,158,11,.12), rgba(79,70,229,.08)); box-shadow: inset 0 1px rgba(255,255,255,.025); }
+        .overall-copy { display: grid; gap: 3px; min-width: 0; }
+        .overall-copy strong { color: #fef3c7; font-size: 13px; }
+        .overall-copy small { color: #94a3b8; font-size: 10px; }
+        .overall-input-wrap { display: flex; align-items: center; gap: 6px; min-width: 155px; border: 1px solid rgba(251,191,36,.42); border-radius: 11px; padding: 8px 11px; background: rgba(2,6,23,.62); }
+        .overall-input-wrap input { width: 105px; border: 0; outline: none; color: #fff; background: transparent; text-align: right; font-size: 20px; font-weight: 900; }
+        .overall-input-wrap input::placeholder { color: #475569; font-size: 14px; }
+        .overall-input-wrap b { color: #fbbf24; }
+        .overall-summary { min-width: 112px; border-left: 1px solid rgba(100,116,139,.25); padding-left: 12px; }
+        .overall-summary > span { display: grid; gap: 2px; }
+        .overall-summary b { color: #fff; font-size: 16px; }
+        .overall-summary em { color: #fbbf24; font-size: 10px; font-style: normal; font-weight: 800; white-space: nowrap; }
+        .overall-summary .overall-empty { color: #64748b; font-size: 11px; }
         .mode-tabs { display: inline-flex; gap: 4px; padding: 4px; border: 1px solid rgba(100,116,139,.25); border-radius: 12px; background: rgba(2,6,23,.55); }
         .mode-tabs button { border: 0; border-radius: 9px; padding: 8px 12px; color: #94a3b8; background: transparent; font-size: 12px; font-weight: 800; }
         .mode-tabs button.active { color: #fff; background: linear-gradient(135deg, #4338ca, #6d28d9); box-shadow: 0 7px 18px rgba(79,70,229,.25); }
@@ -793,6 +860,10 @@
           .header-actions .reset-label { display: none; }
           .content { padding: 11px; }
           .course-card { padding: 12px; border-radius: 15px; }
+          .overall-percent-card { grid-template-columns: 1fr; align-items: stretch; }
+          .overall-input-wrap { justify-content: flex-end; min-width: 0; }
+          .overall-input-wrap input { width: 130px; }
+          .overall-summary { border-left: 0; border-top: 1px solid rgba(100,116,139,.22); padding: 9px 0 0; }
           .two-fields { grid-template-columns: 1fr; }
           .earned-percent-card { align-items: stretch; flex-direction: column; }
           .earned-percent-input { justify-content: flex-end; }
